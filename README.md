@@ -45,6 +45,8 @@ conda env create -f environment.yml
 ### Build source
 Check the ```build_resources.sh```.
 
+*The models are available at https://huggingface.co/xg-chu/GAGAvatar_track.*
+
 
 ## Fast start
 *It takes longer to track the first picture.*

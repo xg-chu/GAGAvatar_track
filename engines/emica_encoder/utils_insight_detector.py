@@ -15,10 +15,11 @@ class InsightDetector:
         _abs_path = os.path.dirname(os.path.abspath(__file__))
         _model_path = os.path.join(_abs_path, '../../assets/emica/ins_scrfd_10g_bnkps.onnx')
         assert os.path.exists(_model_path), f"Model not found: {_model_path}."
+        self._device = device
         self.det_model = RetinaFace(_model_path, input_size=320, device=device)
 
     def get(self, image_tensor):
-        bbox, kps = self.det_model.detect(image_tensor)
+        bbox, kps = self.det_model.detect(image_tensor.to(self._device))
         if bbox.shape[0] == 0:
             return None, None, None
         faces = [dict(bbox=bbox[i, 0:4], kps=kps[i], det_score=bbox[i, 4]) for i in range(bbox.shape[0])]

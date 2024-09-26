@@ -25,7 +25,7 @@ class FLAMEModel(nn.Module):
         # print("creating the FLAME Model")
         _abs_path = os.path.dirname(os.path.abspath(__file__))
         self.flame_path = os.path.join(_abs_path, '../../assets/flame')
-        self.flame_ckpt = torch.load(os.path.join(self.flame_path, 'FLAME_with_eye.pth'))
+        self.flame_ckpt = torch.load(os.path.join(self.flame_path, 'FLAME_with_eye.pt'))
         flame_model = self.flame_ckpt['flame_model']
         flame_lmk = self.flame_ckpt['lmk_embeddings']
         

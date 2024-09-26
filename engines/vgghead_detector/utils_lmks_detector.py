@@ -15,7 +15,7 @@ class LmksDetector(torch.nn.Module):
         self._device = device
         # model
         _abs_path = os.path.dirname(os.path.abspath(__file__))
-        _model_path = os.path.join(_abs_path, '../../assets/vgghead/lmks_2d.pth')
+        _model_path = os.path.join(_abs_path, '../../assets/vgghead/lmks_2d.pt')
         model = LandmarkDetector(_model_path)
         self.model = model.to(self._device).eval()
         

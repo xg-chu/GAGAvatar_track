@@ -14,7 +14,7 @@ class EmicaEncoder(torch.nn.Module):
 
     def _init_models(self, ):
         _abs_path = os.path.dirname(os.path.abspath(__file__))
-        _model_path = os.path.join(_abs_path, '../../assets/emica/EMICA-CVT_flame2020_notexture.pth')
+        _model_path = os.path.join(_abs_path, '../../assets/emica/EMICA-CVT_flame2020_notexture.pt')
         assert os.path.exists(_model_path), f"Model not found: {_model_path}."
         ckpt = torch.load(_model_path, map_location='cpu')
         self.mica_encoder = MicaEncoder()

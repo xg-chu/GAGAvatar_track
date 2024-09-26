@@ -14,7 +14,7 @@ class StyleMatteEngine(torch.nn.Module):
     def _init_models(self, ):
         # load dict
         _abs_script_path = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-        _ckpt_path = os.path.join(_abs_script_path, '../../assets/matting', 'stylematte_synth.pth')
+        _ckpt_path = os.path.join(_abs_script_path, '../../assets/matting', 'stylematte_synth.pt')
         state_dict = torch.load(_ckpt_path, map_location='cpu')
         # build model
         model = StyleMatte()

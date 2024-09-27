@@ -164,7 +164,7 @@ class LMDBEngine:
         all_keys = self.keys()
         if filter_key is not None:
             all_keys = [key for key in all_keys if filter_key in key]
-        all_keys = random.sample(all_keys, k=k)
+        all_keys = random.choices(all_keys, k=k)
         print('Visualize: ', all_keys)
         images = [self.load(key, type='image')/255.0 for key in all_keys]
         images = [torchvision.transforms.functional.resize(i, (256, 256), antialias=True) for i in images]

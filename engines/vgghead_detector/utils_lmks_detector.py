@@ -568,7 +568,7 @@ class LandmarkDetector(nn.Module):
 
         self.heatmap_head = HeatmapHead()
 
-        self.load_state_dict(torch.load(model_path, map_location='cpu'))
+        self.load_state_dict(torch.load(model_path, map_location='cpu', weights_only=True))
 
     def forward(self, img):
         heatmap, landmark = self.heatmap_head(self.backbone(img))

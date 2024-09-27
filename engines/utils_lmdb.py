@@ -38,7 +38,7 @@ class LMDBEngine:
             image_buf = torch.tensor(np.frombuffer(payload, dtype=np.uint8))
             data = torchvision.io.decode_image(image_buf, mode=torchvision.io.ImageReadMode.RGB)
         except:
-            data = torch.load(io.BytesIO(payload))
+            data = torch.load(io.BytesIO(payload), weights_only=True)
         return data
 
     def __del__(self,):
@@ -52,7 +52,7 @@ class LMDBEngine:
         if payload is None:
             raise KeyError('Key:{} Not Found!'.format(key_name))
         if type == 'torch':
-            torch_data = torch.load(io.BytesIO(payload))
+            torch_data = torch.load(io.BytesIO(payload), weights_only=True)
             return torch_data
         elif type == 'image':
             image_buf = torch.tensor(np.frombuffer(payload, dtype=np.uint8))
@@ -94,7 +94,7 @@ class LMDBEngine:
                     payload[key] = payload[key].detach().float().cpu()
                 torch.save(payload, torch_buf)
             payload_encoded = torch_buf.getvalue()
-            # torch_data = torch.load(io.BytesIO(payload_encoded))
+            # torch_data = torch.load(io.BytesIO(payload_encoded), weights_only=True)
             self._lmdb_txn.put(key_name.encode(), payload_encoded)
         elif type == 'image':
             assert payload.dim() == 3 and payload.shape[0] == 3

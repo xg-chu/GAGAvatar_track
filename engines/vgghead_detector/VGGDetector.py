@@ -25,7 +25,7 @@ class VGGHeadDetector(torch.nn.Module):
         self.model.to(self._device).eval()
 
     @torch.no_grad()
-    def forward(self, image_tensor, image_key, conf_threshold=0.5):
+    def forward(self, image_tensor, image_key, conf_threshold=0.5, only_vgghead=False):
         if not hasattr(self, 'model'):
             self._init_models()
         image_tensor = image_tensor.to(self._device).float()
@@ -40,6 +40,8 @@ class VGGHeadDetector(torch.nn.Module):
         bbox = bbox.clip(0, self.image_size)
         bbox[[0, 2]] -= padding[0]; bbox[[1, 3]] -= padding[1]; bbox /= scale
         bbox = bbox.clip(0, self.image_size / scale)
+        if only_vgghead:
+            return vgg_results, bbox, None
         lmks_2d70 = self.lmks_detector(image_tensor, bbox)
         return vgg_results, bbox, lmks_2d70
 

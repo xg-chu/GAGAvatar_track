@@ -30,30 +30,69 @@ class CoreEngine:
         self.calibration_results = calibration_results
         self.optim_engine = OptimEngine(self.calibration_results, device=device)
 
-    def build_video(self, video_path, output_path, matting=False, background=0.0):
+    def build_video(self, video_path, output_path, matting=False, background=0.0, if_crop=True):
+        def smooth_bbox(all_bbox, alpha=0.7):
+            smoothed_bbox = [all_bbox[0]]  # Initialize the smoothed data with the first value of the input data
+            for i in range(1, len(all_bbox)):
+                smoothed_value = alpha * all_bbox[i] + (1 - alpha) * smoothed_bbox[i-1]
+                smoothed_bbox.append(smoothed_value)
+            return smoothed_bbox
+            
         video_name = os.path.basename(video_path).split('.')[0]
         if os.path.exists(output_path):
             print(f'Output path {output_path} exists, replace it.')
             shutil.rmtree(output_path) 
         os.makedirs(output_path)
         if not os.path.exists(os.path.join(output_path, 'img_lmdb')):
-            lmdb_engine = LMDBEngine(os.path.join(output_path, 'img_lmdb'), write=True)
             frames_data, _, meta_data = torchvision.io.read_video(video_path, output_format='TCHW')
             assert frames_data.shape[0] > 0, 'No frames in the video, reading video failed.'
             print(f'Processing video {video_path} with {frames_data.shape[0]} frames.')
-            for fidx, frame in tqdm(enumerate(frames_data), total=frames_data.shape[0], ncols=80, colour='#95bb72'):
-                if meta_data['video_fps'] > 50:
-                    if fidx % 2 == 0:
-                        continue
-                frame = torchvision.transforms.functional.resize(frame, 512, antialias=True) 
-                frame = torchvision.transforms.functional.center_crop(frame, 512)
-                if matting:
-                    frame = self.matting_engine(
-                        frame/255.0, return_type='matting', background_rgb=background
-                    ).cpu()*255.0
-                lmdb_engine.dump(f'{video_name}_{fidx}', payload=frame, type='image')
-            lmdb_engine.random_visualize(os.path.join(output_path, 'img_lmdb', 'visualize.jpg'))
-            lmdb_engine.close()
+            if if_crop:
+                all_frames_boxes, all_frames_idx = [], []
+                for fidx, frame in tqdm(enumerate(frames_data), total=frames_data.shape[0], ncols=80, colour='#95bb72'):
+                    if meta_data['video_fps'] > 50:
+                        if fidx % 2 == 0:
+                            continue
+                    _, bbox, _ = self.vgghead_encoder(frame, fidx, only_vgghead=True)
+                    if bbox is not None:
+                        all_frames_idx.append(fidx)
+                        all_frames_boxes.append(bbox.cpu())
+                if not len(all_frames_boxes):
+                    print('No face detected in the video: {}, tracking failed.'.format(video_path))
+                    return None
+                frames_data = frames_data[all_frames_idx]
+                all_frames_boxes = smooth_bbox(all_frames_boxes, alpha=0.03)
+                lmdb_engine = LMDBEngine(os.path.join(output_path, 'img_lmdb'), write=True)
+                for fidx, frame in tqdm(enumerate(frames_data), total=frames_data.shape[0], ncols=80, colour='#95bb72'):
+                    frame_bbox = all_frames_boxes[fidx]
+                    frame_bbox = expand_bbox(frame_bbox, scale=1.65).long()
+                    crop_frame = torchvision.transforms.functional.crop(
+                        frame, top=frame_bbox[1], left=frame_bbox[0], height=frame_bbox[3]-frame_bbox[1], width=frame_bbox[2]-frame_bbox[0]
+                    )
+                    crop_frame = torchvision.transforms.functional.resize(crop_frame, (512, 512), antialias=True)
+                    # frame = torchvision.transforms.functional.center_crop(frame, 512)
+                    if matting:
+                        crop_frame = self.matting_engine(
+                            crop_frame/255.0, return_type='matting', background_rgb=background
+                        ).cpu()*255.0
+                    lmdb_engine.dump(f'{video_name}_{fidx}', payload=crop_frame, type='image')
+                lmdb_engine.random_visualize(os.path.join(output_path, 'img_lmdb', 'visualize.jpg'))
+                lmdb_engine.close()
+            else:
+                lmdb_engine = LMDBEngine(os.path.join(output_path, 'img_lmdb'), write=True)
+                for fidx, frame in tqdm(enumerate(frames_data), total=frames_data.shape[0], ncols=80, colour='#95bb72'):
+                    if meta_data['video_fps'] > 50:
+                        if fidx % 2 == 0:
+                            continue
+                    frame = torchvision.transforms.functional.resize(frame, 512, antialias=True) 
+                    frame = torchvision.transforms.functional.center_crop(frame, 512)
+                    if matting:
+                        frame = self.matting_engine(
+                            frame/255.0, return_type='matting', background_rgb=background
+                        ).cpu()*255.0
+                    lmdb_engine.dump(f'{video_name}_{fidx}', payload=frame, type='image')
+                lmdb_engine.random_visualize(os.path.join(output_path, 'img_lmdb', 'visualize.jpg'))
+                lmdb_engine.close()
             return meta_data['video_fps']
         else:
             video_reader = torchvision.io.VideoReader(src=video_path)
@@ -157,13 +196,13 @@ class CoreEngine:
 
     def crop_image(self, inp_image):
         ori_height, ori_width = inp_image.shape[1:]
-        if not hasattr(self.emica_data_engine, 'insight_detector'):
-            self.emica_data_engine._init_models()
-        bbox, _, _ = self.emica_data_engine.insight_detector.get(inp_image)
-        # _, bbox, _ = self.vgghead_encoder(inp_image, 'online_track')
+        # if not hasattr(self.emica_data_engine, 'insight_detector'):
+        #     self.emica_data_engine._init_models()
+        # bbox, _, _ = self.emica_data_engine.insight_detector.get(inp_image)
+        _, bbox, _ = self.vgghead_encoder(inp_image, 'online_track', only_vgghead=True)
         if bbox is None:
             return None
-        bbox = expand_bbox(bbox, scale=1.85).long()
+        bbox = expand_bbox(bbox, scale=1.65).long()
         crop_image = torchvision.transforms.functional.crop(
             inp_image, top=bbox[1], left=bbox[0], height=bbox[3]-bbox[1], width=bbox[2]-bbox[0]
         )
@@ -256,7 +295,7 @@ def build_minibatch(all_frames, batch_size=1024, share_id=False):
 def expand_bbox(bbox, scale=1.1):
     xmin, ymin, xmax, ymax = bbox.unbind(dim=-1)
     cenx, ceny = (xmin + xmax) / 2, (ymin + ymax) / 2
-    ceny = ceny - (ymax - ymin) * 0.05
+    # ceny = ceny - (ymax - ymin) * 0.05
     extend_size = torch.sqrt((ymax - ymin) * (xmax - xmin)) * scale
     xmine, xmaxe = cenx - extend_size / 2, cenx + extend_size / 2
     ymine, ymaxe = ceny - extend_size / 2, ceny + extend_size / 2

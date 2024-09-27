@@ -21,6 +21,8 @@ class Tracker:
         output_path = os.path.join(f'outputs/{dir_path}', data_name) if dir_path else f'outputs/{data_name}'
         print('Building video data...')
         fps = self.tracker.build_video(video_path, output_path, matting=True, background=0.0)
+        if fps is None:
+            return
         print('Building video data done!')
         lmdb_engine = LMDBEngine(os.path.join(output_path, 'img_lmdb'), write=False)
         print('Track with flame/bbox...')

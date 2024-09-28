@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # Copyright (c) Xuangeng Chu (xg.chu@outlook.com)
+
 import os
 import sys
 import torch
@@ -49,7 +50,7 @@ class CoreEngine:
             print(f'Processing video {video_path} with {frames_data.shape[0]} frames.')
             if if_crop:
                 all_frames_boxes, all_frames_idx = [], []
-                for fidx, frame in tqdm(enumerate(frames_data), total=frames_data.shape[0], ncols=80, colour='#95bb72'):
+                for fidx, frame in tqdm(enumerate(frames_data), total=frames_data.shape[0]):
                     if meta_data['video_fps'] > 50:
                         if fidx % 2 == 0:
                             continue
@@ -63,7 +64,7 @@ class CoreEngine:
                 frames_data = frames_data[all_frames_idx]
                 all_frames_boxes = smooth_bbox(all_frames_boxes, alpha=0.03)
                 lmdb_engine = LMDBEngine(os.path.join(output_path, 'img_lmdb'), write=True)
-                for fidx, frame in tqdm(enumerate(frames_data), total=frames_data.shape[0], ncols=80, colour='#95bb72'):
+                for fidx, frame in tqdm(enumerate(frames_data), total=frames_data.shape[0]):
                     frame_bbox = all_frames_boxes[fidx]
                     frame_bbox = expand_bbox(frame_bbox, scale=1.65).long()
                     crop_frame = torchvision.transforms.functional.crop(
@@ -80,7 +81,7 @@ class CoreEngine:
                 lmdb_engine.close()
             else:
                 lmdb_engine = LMDBEngine(os.path.join(output_path, 'img_lmdb'), write=True)
-                for fidx, frame in tqdm(enumerate(frames_data), total=frames_data.shape[0], ncols=80, colour='#95bb72'):
+                for fidx, frame in tqdm(enumerate(frames_data), total=frames_data.shape[0]):
                     if meta_data['video_fps'] > 50:
                         if fidx % 2 == 0:
                             continue
@@ -100,18 +101,19 @@ class CoreEngine:
             return meta_data['fps'][0]
 
     def track_base(self, lmdb_engine, output_path):
-        if os.path.exists(os.path.join(output_path, 'base.pkl')):
+        if output_path is not None and os.path.exists(os.path.join(output_path, 'base.pkl')):
             with open(os.path.join(output_path, 'base.pkl'), 'rb') as f:
                 base_results = pickle.load(f)
             return base_results
         else:
             images_dataset = ImagesData(lmdb_engine)
+            num_workers = 0 if len(images_dataset) < 5 else 2
             images_loader = torch.utils.data.DataLoader(
-                images_dataset, batch_size=1, num_workers=2, shuffle=False
+                images_dataset, batch_size=1, num_workers=num_workers, shuffle=False
             )
             images_loader = iter(images_loader)
             base_results = {}
-            for image_data in tqdm(images_loader, ncols=80, colour='#95bb72'):
+            for image_data in tqdm(images_loader):
                 image_data = data_to_device(image_data, device=self._device)
                 image, image_key = image_data['image'][0], image_data['image_key'][0]
                 emica_inputs = self.emica_data_engine(image, image_key)
@@ -129,12 +131,13 @@ class CoreEngine:
                     'vgg_results': vgg_results, 
                     'bbox': bbox.cpu().numpy() / 512.0
                 }
-            with open(os.path.join(output_path, 'base.pkl'), 'wb') as f:
-                pickle.dump(base_results, f)
+            if output_path is not None:
+                with open(os.path.join(output_path, 'base.pkl'), 'wb') as f:
+                    pickle.dump(base_results, f)
             return base_results
 
     def track_optim(self, base_result, output_path, lmdb_engine=None, share_id=False):
-        if os.path.exists(os.path.join(output_path, 'optim.pkl')):
+        if output_path is not None and os.path.exists(os.path.join(output_path, 'optim.pkl')):
             with open(os.path.join(output_path, 'optim.pkl'), 'rb') as f:
                 optim_results = pickle.load(f)
             return optim_results
@@ -147,7 +150,7 @@ class CoreEngine:
             else:
                 batch_frames = None
             optim_results = {}
-            for mini_batch in tqdm(mini_batchs, ncols=80, colour='#95bb72'):
+            for mini_batch in tqdm(mini_batchs):
                 mini_batch_emica = [base_result[key] for key in mini_batch]
                 mini_batch_emica = torch.utils.data.default_collate(mini_batch_emica)
                 mini_batch_emica = data_to_device(mini_batch_emica, device=self._device)
@@ -158,41 +161,59 @@ class CoreEngine:
                 if visualization is not None:
                     torchvision.utils.save_image(visualization, os.path.join(output_path, 'optim.jpg'))
                 optim_results.update(optim_result)
-            with open(os.path.join(output_path, 'optim.pkl'), 'wb') as f:
-                pickle.dump(optim_results, f)
+            if output_path is not None:
+                with open(os.path.join(output_path, 'optim.pkl'), 'wb') as f:
+                    pickle.dump(optim_results, f)
             return optim_results
 
-    def track_image(self, inp_image, if_crop=True, if_matting=True):
-        assert inp_image.dim() == 3, f'Image dim must be 3, but got {inp_image.dim()}.'
-        assert inp_image.max() > 1.0, f'Image in [0, 255.0], but got {inp_image.max()}.'
-        if if_crop:
-            inp_image = self.crop_image(inp_image)
-            if inp_image is None:
-                return None, None
-        if if_matting:
-            inp_image = self.matting_engine.forward(inp_image/255.0, return_type='matting', background_rgb=0.0).clamp(0.0, 1.0)
-            inp_image = inp_image * 255.0
-        emica_inputs = self.emica_data_engine(inp_image, 'online_track')
-        if emica_inputs is None:
-            return None, None
-        emica_inputs = torch.utils.data.default_collate([emica_inputs])
-        emica_inputs = data_to_device(emica_inputs, device=self._device)
-        emica_results = self.emica_encoder(emica_inputs)
-        vgg_results, bbox, lmks_2d70 = self.vgghead_encoder(inp_image, 'online_track')
-        if vgg_results is None:
-            return None, None
-        emica_results, vgg_results = self._process_emica_vgg(emica_results, vgg_results, lmks_2d70)
-        base_results = {
-            'emica_results': emica_results, 'vgg_results': vgg_results,
-            'bbox': bbox.cpu().numpy() / 512.0
-        }
-        base_results = torch.utils.data.default_collate([base_results])
-        base_results = data_to_device(base_results, device=self._device)
-        track_results, vis_results = self.optim_engine.lightning_optimize(
-            ['online_track'], base_results, batch_frames=inp_image[None]
-        )
-        track_results['online_track']['image'] = (inp_image / 255.0).cpu().numpy()
-        return track_results['online_track'], vis_results
+    def track_image(self, inp_images, inp_keys, if_matting=True):
+        assert type(inp_images) == list, f'Image must be a list, but got {type(inp_images)}.'
+        assert inp_images[0].dim() == 3, f'Image dim must be 4, but got {inp_images[0].dim()}.'
+        assert inp_images[0].max() > 1.0, f'Image in [0, 255.0], but got {inp_images[0].max()}.'
+        assert len(inp_images) == len(inp_keys), f'Image and key length must be equal, but got {inp_images.shape[0]} and {len(inp_keys)}.'
+        croped_images, croped_keys = [], []
+        for inp_key, inp_image in tqdm(zip(inp_keys, inp_images), total=len(inp_images)):
+            croped_image = self.crop_image(inp_image)
+            if inp_image is not None:
+                if if_matting:
+                    croped_image = self.matting_engine.forward(
+                        croped_image/255.0, return_type='matting', background_rgb=0.0
+                    )
+                    croped_image = croped_image.clamp(0.0, 1.0) * 255.0
+                croped_images.append(croped_image)
+                croped_keys.append(inp_key)
+        if not len(croped_images):
+            print('No face detected in all the images, tracking failed.')
+            return None
+        images_engine = {key: image.cpu() for key, image in zip(croped_keys, croped_images)}
+        base_results = self.track_base(images_engine, None)
+        if not len(base_results.keys()):
+            print('No face detected in all the images, tracking failed.')
+            return None
+        optim_results = self.track_optim(base_results, None, None, share_id=False)
+        for key in optim_results:
+            optim_results[key]['image'] = images_engine[key].cpu().numpy() / 255.0
+        # do visualization
+        flame_model = FLAMEModel(n_shape=300, n_exp=100, scale=self.calibration_results['verts_scale'])
+        mesh_render = RenderMesh(512, faces=flame_model.get_faces().cpu().numpy(), device=self._device)
+        for key in optim_results:
+            pred_vertices, _ = flame_model(
+                shape_params=torch.tensor(optim_results[key]['shapecode'])[None],
+                expression_params=torch.tensor(optim_results[key]['expcode'])[None],
+                pose_params=torch.tensor(optim_results[key]['posecode'])[None], 
+                eye_pose_params=torch.tensor(optim_results[key]['eyecode'])[None],
+            )
+            rendered_image, alpha_image = mesh_render(
+                pred_vertices.to(self._device), focal_length=self.calibration_results['focal_length'],
+                transform_matrix=torch.tensor(optim_results[key]['transform_matrix'])[None].to(self._device),
+            )
+            rendered_image = rendered_image[0].cpu().numpy() / 255.0
+            alpha_image = alpha_image[0].expand(3, -1, -1).cpu().numpy()
+            vis_image = optim_results[key]['image'].copy()
+            vis_image[alpha_image>0.5] *= 0.5
+            vis_image[alpha_image>0.5] += (rendered_image[alpha_image>0.5] * 0.5)
+            optim_results[key]['vis_image'] = vis_image
+        return optim_results
 
     def crop_image(self, inp_image):
         ori_height, ori_width = inp_image.shape[1:]
@@ -280,7 +301,10 @@ def build_minibatch(all_frames, batch_size=1024, share_id=False):
             if len(mini_batch):
                 all_mini_batch.append(mini_batch)
     else:
-        all_frames = sorted(all_frames, key=lambda x: int(x.split('_')[-1]))
+        try:
+            all_frames = sorted(all_frames, key=lambda x: int(x.split('_')[-1]))
+        except:
+            all_frames = sorted(all_frames)
         all_mini_batch, mini_batch = [], []
         for frame_name in all_frames:
             mini_batch.append(frame_name)

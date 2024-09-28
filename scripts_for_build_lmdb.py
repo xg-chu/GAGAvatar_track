@@ -44,7 +44,7 @@ if __name__ == '__main__':
     for vidx, video_dir_path in enumerate(VIDEO_DIRS):
         frames = glob.glob(f'{video_dir_path}/*.jpg') # image name shuold be [frameid.jpg]
         frames = sorted(frames, key=lambda x: int(x.split('/')[-1].split('.')[0]))
-        video_id = os.path.basename(video_dir_path[:-1] if video_dir_path[-1] == '/' else video_dir_path) # video_id should be INT
+        video_id = os.path.basename(video_dir_path[:-1] if video_dir_path.endswith('/') else video_dir_path) # video_id should be INT
         for frame_path in tqdm(frames, desc=f'Processing video {vidx+1}/{len(VIDEO_DIRS)}:'):
             frame_tensor = detector.forward(frame_path)
             frame_id = int(os.path.splitext(os.path.basename(frame_path))[0])

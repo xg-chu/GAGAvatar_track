@@ -16,7 +16,7 @@ class Tracker:
 
     def track_lmdb(self, lmdb_path, dir_path=None, no_shareid=False):
         # build name
-        data_name = os.path.basename(lmdb_path[:-1] if lmdb_path[-1] == '/' else lmdb_path)
+        data_name = os.path.basename(lmdb_path[:-1] if lmdb_path.endswith('/') else lmdb_path)
         output_path = os.path.join('outputs', dir_path) if dir_path else f'outputs/{data_name}'
         if not os.path.exists(output_path):
             os.makedirs(output_path)

@@ -3,8 +3,10 @@
 
 import os
 import sys
+import time
 import torch
 import pickle
+import shutil
 import numpy as np
 import torchvision
 
@@ -15,28 +17,32 @@ class Tracker:
         self._device = device
         self.tracker = CoreEngine(focal_length=focal_length, device=device)
 
-    def track_image(self, image_path, no_crop=False, no_matting=False):
+    def track_image(self, image_paths, image_keys, no_matting=False):
         # build name
-        output_path = 'outputs/{}'.format(os.path.basename(image_path))
-        if not os.path.exists(output_path):
-            os.makedirs(output_path)
-        image_tensor = torchvision.io.read_image(image_path, mode=torchvision.io.image.ImageReadMode.RGB)
-        image_tensor = image_tensor.to(self._device).float()
+        if len(image_paths) == 1:
+            output_path = 'outputs/{}'.format(os.path.basename(image_paths[0]))
+        else:
+            output_path = 'outputs/{}'.format(os.path.basename(os.path.dirname(image_paths[0])))
+        if os.path.exists(output_path):
+            print(f'Output path {output_path} exists, replace it.')
+            shutil.rmtree(output_path) 
+        os.makedirs(output_path)
+        input_images = [
+            torchvision.io.read_image(i, mode=torchvision.io.image.ImageReadMode.RGB).to(self._device).float()
+            for i in image_paths
+        ]
         print('Track image...')
-        if_crop, if_matting = not no_crop, not no_matting
-        track_results, vis_results = self.tracker.track_image(
-            image_tensor, if_crop=if_crop, if_matting=if_matting
-        )
+        track_results = self.tracker.track_image(input_images, image_keys, if_matting=not no_matting)
         if track_results is not None:
+            for key in track_results.keys():
+                torchvision.utils.save_image(
+                    [torch.tensor(track_results[key]['image']), torch.tensor(track_results[key]['vis_image'])],
+                    os.path.join(output_path, key)
+                )
+                track_results[key].pop('vis_image')
             with open(os.path.join(output_path, 'optim.pkl'), 'wb') as f:
                 pickle.dump(track_results, f)
-            torchvision.utils.save_image([
-                    torch.tensor(track_results['image']), vis_results
-                ], os.path.join(output_path, 'track.jpg')
-            )
             print('Track done: {}!'.format(output_path))
-        else:
-            print('No face detected!')
 
 
 if __name__ == '__main__':
@@ -48,8 +54,15 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--image_path', '-i', required=True, type=str)
     parser.add_argument('--no_matting', action='store_true')
-    parser.add_argument('--no_crop', action='store_true')
     args = parser.parse_args()
     
     tracker = Tracker(focal_length=12.0, device='cuda')
-    tracker.track_image(args.image_path, no_crop=args.no_crop, no_matting=args.no_matting)
+    if os.path.isdir(args.image_path):
+        image_paths = os.listdir(args.image_path)
+        image_paths = [image_path for image_path in image_paths if image_path.split('.')[-1].lower() in ['jpg', 'png', 'jpeg']]
+        image_paths = [os.path.join(args.image_path, image_path) for image_path in image_paths]
+        image_keys = [os.path.basename(image_path) for image_path in image_paths]
+        tracker.track_image(image_paths, image_keys, no_matting=args.no_matting)
+    else:
+        assert args.image_path.split('.')[-1].lower() in ['jpg', 'png', 'jpeg'], 'Invalid image path!'
+        tracker.track_image([args.image_path], [os.path.basename(args.image_path)], no_matting=args.no_matting)

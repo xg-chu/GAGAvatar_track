@@ -18,29 +18,11 @@
 
 ## Installation
 ### Build environment
-Comming soon.
-<!-- <details>
-<summary><span >Install step by step</span></summary>
-
-```
-conda create -n track python=3.9
-conda install pytorch==2.0.1 torchvision==0.15.2 torchaudio==2.0.2 pytorch-cuda=11.8 -c pytorch -c nvidia
-conda install -c fvcore -c iopath -c conda-forge fvcore iopath
-conda install pytorch3d -c pytorch3d
-pip3 install mediapipe tqdm rich lmdb einops colored ninja av opencv-python scikit-image onnx2torch transformers pykalman face_alignment
-```
-
-</details>
-<details>
-
-<summary><span style="font-weight: bold;">Install with environment.yml (recommend)</span></summary>
+This environment is a sub-environment of **GAGAvatar**. You can skip this step if you have already built **GAGAvatar**.
 
 ```
 conda env create -f environment.yml
 ```
-
-</details> -->
-
 
 ### Build source
 Check the ```build_resources.sh```.
@@ -51,16 +33,16 @@ Check the ```build_resources.sh```.
 ## Fast start
 *It takes longer to track the first picture.*
 
-### Track on video:
+### Track on video(s):
 ```
 python track_video.py -v ./demos/obama.mp4
 ```
 
-### Track on one image:
+### Track on image(s):
 ```
 python track_image.py -i ./demos/monroe.jpg
 ```
-### Track all images in a lmdb dataset:
+### Track all images in a LMDB dataset:
 ```
-python track_lmdb.py -l ./demos/lmdb
+python track_lmdb.py -l ./demos/vfhq_demo
 ```

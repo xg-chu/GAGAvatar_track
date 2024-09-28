@@ -31,18 +31,18 @@ Check the ```build_resources.sh```.
 
 
 ## Fast start
-*It takes longer to track the first picture.*
+*It takes longer to track the first frame.*
 
-### Track on video(s):
+#### Track on video(s):
 ```
 python track_video.py -v ./demos/obama.mp4
 ```
 
-### Track on image(s):
+#### Track on image(s):
 ```
 python track_image.py -i ./demos/monroe.jpg
 ```
-### Track all images in a LMDB dataset:
+#### Track all images in a LMDB dataset:
 ```
 python track_lmdb.py -l ./demos/vfhq_demo
 ```

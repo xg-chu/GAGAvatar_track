@@ -22,6 +22,7 @@ This environment is a sub-environment of **GAGAvatar**. You can skip this step i
 
 ```
 conda env create -f environment.yml
+conda activate GAGAvatar_track
 ```
 
 ### Build source

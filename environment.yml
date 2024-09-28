@@ -1,4 +1,4 @@
-name: 3dcv_home_track
+name: GAGAvatar_track
 channels:
   - pytorch3d
   - pytorch

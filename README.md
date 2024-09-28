@@ -25,8 +25,8 @@ conda env create -f environment.yml
 conda activate GAGAvatar_track
 ```
 
-### Build source
-Check the ```build_resources.sh```.
+### Prepare resources
+Prepare resources with ```bash ./build_resources.sh```.
 
 *The models are available at https://huggingface.co/xg-chu/GAGAvatar_track.*
 

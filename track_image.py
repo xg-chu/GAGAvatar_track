@@ -17,8 +17,9 @@ class Tracker:
         self._device = device
         self.tracker = CoreEngine(focal_length=focal_length, device=device)
 
-    def track_image(self, image_paths, image_keys, no_matting=False):
+    def track_image(self, image_paths, no_matting=False):
         # build name
+        image_keys = [os.path.basename(image_path) for image_path in image_paths]
         if len(image_paths) == 1:
             output_path = 'outputs/{}'.format(os.path.basename(image_paths[0]))
         else:
@@ -61,8 +62,7 @@ if __name__ == '__main__':
         image_paths = os.listdir(args.image_path)
         image_paths = [image_path for image_path in image_paths if image_path.split('.')[-1].lower() in ['jpg', 'png', 'jpeg']]
         image_paths = [os.path.join(args.image_path, image_path) for image_path in image_paths]
-        image_keys = [os.path.basename(image_path) for image_path in image_paths]
-        tracker.track_image(image_paths, image_keys, no_matting=args.no_matting)
+        tracker.track_image(image_paths, no_matting=args.no_matting)
     else:
         assert args.image_path.split('.')[-1].lower() in ['jpg', 'png', 'jpeg'], 'Invalid image path!'
-        tracker.track_image([args.image_path], [os.path.basename(args.image_path)], no_matting=args.no_matting)
+        tracker.track_image([args.image_path], no_matting=args.no_matting)

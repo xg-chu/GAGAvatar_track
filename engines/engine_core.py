@@ -168,7 +168,7 @@ class CoreEngine:
 
     def track_image(self, inp_images, inp_keys, if_matting=True):
         assert type(inp_images) == list, f'Image must be a list, but got {type(inp_images)}.'
-        assert inp_images[0].dim() == 3, f'Image dim must be 4, but got {inp_images[0].dim()}.'
+        assert inp_images[0].dim() == 3, f'Image dim must be 3, but got {inp_images[0].dim()}.'
         assert inp_images[0].max() > 1.0, f'Image in [0, 255.0], but got {inp_images[0].max()}.'
         assert len(inp_images) == len(inp_keys), f'Image and key length must be equal, but got {inp_images.shape[0]} and {len(inp_keys)}.'
         croped_images, croped_keys = [], []

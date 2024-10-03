@@ -29,7 +29,11 @@ conda activate GAGAvatar_track
 ### Prepare resources
 Prepare resources with ```bash ./build_resources.sh```.
 
-*The models are available at https://huggingface.co/xg-chu/GAGAvatar_track.*
+<details>
+<summary><span>Resources Link</span></summary>
+
+*The models and resources are available at https://huggingface.co/xg-chu/GAGAvatar_track.*
+</details>
 
 
 ## Fast start

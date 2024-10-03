@@ -1,4 +1,5 @@
-<h1 align="center"><b>⚡️ Tracking Framework for GAGA ⚡️</b></h1>
+<h1 align="center"><b>⚡️ Tracking Framework for <a href="https://github.com/xg-chu/GAGAvatar">GAGAvatar</a> ⚡️</b></h1>
+
 <div align="center"> 
     <b>🚀 Track video 🚀</b> 
     <div align="center"> 

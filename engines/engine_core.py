@@ -61,10 +61,11 @@ class CoreEngine:
                 if not len(all_frames_boxes):
                     print('No face detected in the video: {}, tracking failed.'.format(video_path))
                     return None
-                frames_data = frames_data[all_frames_idx]
+                # frames_data = frames_data[all_frames_idx]
                 all_frames_boxes = smooth_bbox(all_frames_boxes, alpha=0.03)
                 lmdb_engine = LMDBEngine(os.path.join(output_path, 'img_lmdb'), write=True)
-                for fidx, frame in tqdm(enumerate(frames_data), total=frames_data.shape[0]):
+                for fidx, ori_fidx in tqdm(enumerate(all_frames_idx), total=len(all_frames_idx)):
+                    frame = frames_data[ori_fidx]
                     frame_bbox = all_frames_boxes[fidx]
                     frame_bbox = expand_bbox(frame_bbox, scale=1.65).long()
                     crop_frame = torchvision.transforms.functional.crop(

@@ -58,7 +58,7 @@ class OptimEngine:
         eye_pose_code = torch.nn.Parameter(emica_posecode.new_zeros(emica_posecode.shape), requires_grad=True)
         optimizer = torch.optim.Adam([
             {'params': [eye_pose_code], 'lr': 0.001},
-            {'params': [rotation], 'lr': 0.0005}, {'params': [translation], 'lr': 0.01},
+            {'params': [rotation], 'lr': 0.0005}, {'params': [translation], 'lr': 0.1},
         ])
         scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=300, gamma=0.1)
         # run
@@ -76,10 +76,11 @@ class OptimEngine:
             pred_lmks = cameras.transform_points_screen(
                 pred_lmks, R=rotation_6d_to_matrix(rotation), T=translation
             )[..., :2]
-            loss_vertices = mse_loss(project_vertices, vgg_vertices) * 80
+            loss_vertices = mse_loss(project_vertices, vgg_vertices) * 25
             loss_lmks = mse_loss(pred_lmks[:, 17:68], gt_lmks2d70[:, 17:68], mask=lmks_mask) * 10
+            loss_lmks1 = mse_loss(pred_lmks[:, :68], vgg_lmks2d70[:, :68], mask=lmks_mask) * 80
             loss_eyepose = mse_loss(pred_lmks[:, 68:], gt_lmks2d70[:, 68:], mask=lmks_mask) * 25
-            base_loss = loss_vertices + loss_eyepose + loss_lmks 
+            base_loss = loss_vertices + loss_eyepose + loss_lmks + loss_lmks1
             optimizer.zero_grad()
             base_loss.backward(retain_graph=True)
             optimizer.step()
@@ -117,9 +118,9 @@ class OptimEngine:
                     vis_i = torchvision.utils.draw_bounding_boxes(
                         vis_i.cpu().to(torch.uint8), bbox[None], width=3, colors='green'
                     )
-                    # vis_i = torchvision.utils.draw_keypoints(vis_i, vgg_lmks2d70[idx:idx+1, 17:], colors="red", radius=1.5)
+                    # vis_i = torchvision.utils.draw_keypoints(vis_i, vgg_lmks2d70[idx:idx+1], colors="red", radius=1.5)
+                    # vis_i = torchvision.utils.draw_keypoints(vis_i, vgg_vertices[idx:idx+1], colors="red", radius=0.5)
                     vis_i = torchvision.utils.draw_keypoints(vis_i, gt_lmks2d70[idx:idx+1, 17:], colors="blue", radius=1.5)
-                    # vis_i = torchvision.utils.draw_keypoints(vis_i, vgg_vertices[idx:idx+1], colors="blue", radius=1.5)
                     vis_i = torchvision.utils.draw_keypoints(vis_i, pred_lmks[idx:idx+1], colors="white", radius=1.5)
                     vis_images.append(vis_i.float().cpu()/255.0)
                 visualization = torchvision.utils.make_grid(vis_images, nrow=4)

@@ -7,6 +7,7 @@ import torch
 import torchvision
 from pytorch3d.renderer import PerspectiveCameras
 from pytorch3d.transforms import matrix_to_rotation_6d, rotation_6d_to_matrix
+from pytorch3d.transforms import axis_angle_to_matrix, matrix_to_axis_angle
 
 from .flame_model import FLAMEModel, RenderMesh
 from .vgghead_detector import reproject_vertices
@@ -133,15 +134,12 @@ class OptimEngine:
         device = emoca_base_rotation.device
         batch_size = emoca_base_rotation.shape[0]
         initial_trans = torch.tensor([[0, 0, 5000.0/image_size]]).to(device)
-        emoca_base_rotation[:, 1] += math.pi
-        emoca_base_rotation = emoca_base_rotation[:, [2, 1, 0]]
-        emoca_base_rotation = batch_rodrigues(emoca_base_rotation)
-        base_transform = torch.cat([
-                transform_inv(emoca_base_rotation), 
-                initial_trans.reshape(1, -1, 1).repeat(batch_size, 1, 1)
-            ], dim=-1
-        )
-        base_transform_p3d = transform_opencv_to_p3d(base_transform)
+        # convert to pytorch3d's axis order
+        emoca_base_rotation[:, [0, 2]] *= -1
+        emoca_base_matrix = axis_angle_to_matrix(emoca_base_rotation)
+        emoca_base_matrix = torch.matmul(emoca_base_matrix, torch.tensor([[-1, 0, 0], [0, 1, 0], [0, 0, -1]]).to(device).float())
+        emoca_base_matrix = emoca_base_matrix.inverse()
+        base_transform_p3d = torch.cat([emoca_base_matrix, initial_trans.reshape(1, -1, 1).repeat(batch_size, 1, 1)], dim=-1)
         # find translate
         cameras = PerspectiveCameras(
             device=device,
@@ -163,72 +161,6 @@ def mse_loss(opt_lmks, target_lmks, mask=None):
     else:
         diff = torch.nn.functional.mse_loss(opt_lmks, target_lmks) / 512.0
     return diff
-
-
-def intrinsic_opencv_to_p3d(focal_length, principal_point, image_size):
-    half_size = image_size/2
-    focal_length = focal_length / half_size
-    principal_point = -(principal_point - half_size) / half_size
-    return focal_length, principal_point
-
-
-def transform_opencv_to_p3d(opencv_transform, verts_scale=1, type='w2c'):
-    assert type in ['w2c', 'c2w']
-    if opencv_transform.dim() == 3:
-        return torch.stack([transform_opencv_to_p3d(t, verts_scale, type) for t in opencv_transform])
-    if type == 'c2w':
-        if opencv_transform.shape[-1] != opencv_transform.shape[-2]:
-            new_transform = torch.eye(4).to(opencv_transform.device)
-            new_transform[:3, :] = opencv_transform
-            opencv_transform = new_transform
-        opencv_transform = torch.linalg.inv(opencv_transform) # c2w to w2c
-    rotation = opencv_transform[:3, :3]
-    rotation = rotation.permute(1, 0)
-    rotation[:, :2] *= -1
-    if opencv_transform.shape[-1] == 4:
-        translation = opencv_transform[:3, 3] * verts_scale
-        translation[:2] *= -1
-        rotation = torch.cat([rotation, translation.reshape(-1, 1)], dim=-1)
-    return rotation
-
-
-def transform_inv(transforms):
-    if transforms.dim() == 3:
-        return torch.stack([transform_opencv_to_p3d(t) for t in transforms])
-    if transforms.shape[-1] != transforms.shape[-2]:
-        new_transform = torch.eye(4)
-        new_transform[:3, :] = transforms
-        transforms = new_transform
-    transforms = torch.linalg.inv(transforms)
-    return transforms[:3]
-
-
-def batch_rodrigues(rot_vecs,):
-    ''' Calculates the rotation matrices for a batch of rotation vectors
-        Parameters
-        ----------
-        rot_vecs: torch.tensor Nx3
-            array of N axis-angle vectors
-        Returns
-        -------
-        R: torch.tensor Nx3x3
-            The rotation matrices for the given axis-angle parameters
-    '''
-    batch_size = rot_vecs.shape[0]
-    device, dtype = rot_vecs.device, rot_vecs.dtype
-    angle = torch.norm(rot_vecs + 1e-8, dim=1, keepdim=True)
-    rot_dir = rot_vecs / angle
-    cos = torch.unsqueeze(torch.cos(angle), dim=1)
-    sin = torch.unsqueeze(torch.sin(angle), dim=1)
-    # Bx1 arrays
-    rx, ry, rz = torch.split(rot_dir, 1, dim=1)
-    K = torch.zeros((batch_size, 3, 3), dtype=dtype, device=device)
-    zeros = torch.zeros((batch_size, 1), dtype=dtype, device=device)
-    K = torch.cat([zeros, -rz, ry, rz, zeros, -rx, -ry, rx, zeros], dim=1) \
-        .view((batch_size, 3, 3))
-    ident = torch.eye(3, dtype=dtype, device=device).unsqueeze(dim=0)
-    rot_mat = ident + sin * K + (1 - cos) * torch.bmm(K, K)
-    return rot_mat
 
 
 def expand_bbox(bbox, t_scale=1.0):

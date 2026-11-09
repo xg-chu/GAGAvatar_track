@@ -175,7 +175,7 @@ class CoreEngine:
         croped_images, croped_keys = [], []
         for inp_key, inp_image in tqdm(zip(inp_keys, inp_images), total=len(inp_images)):
             croped_image = self.crop_image(inp_image)
-            if inp_image is not None:
+            if croped_image is not None:
                 if if_matting:
                     croped_image = self.matting_engine.forward(
                         croped_image/255.0, return_type='matting', background_rgb=0.0
